@@ -25,6 +25,7 @@ const DigitalRain = ({ isError }) => {
       ctx.fillStyle = 'rgba(13, 13, 13, 0.1)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // Цвет меняется в зависимости от ошибки
       ctx.fillStyle = isError ? 'rgba(255, 0, 0, 0.2)' : 'rgba(0, 243, 255, 0.12)';
       ctx.font = `${fontSize}px monospace`;
 
@@ -51,24 +52,44 @@ export default function App() {
   const [percent, setPercent] = useState(0);
   const [stage, setStage] = useState('loading'); 
   const [isError, setIsError] = useState(false);
+  const [wasRestored, setWasRestored] = useState(false); // Флаг для смены текста после восстановления
 
-  // ЛОГИКА ПРЕЛОАДЕРА (ровно 1.5 сек)
+  // 1. ПРЕЛОАДЕР (1.5 сек)
   useEffect(() => {
     if (percent < 100) {
-      const timer = setTimeout(() => {
-        // Прибавляем по 2% каждые 30мс (100 / 2 * 30 = 1500мс)
-        setPercent(prev => prev + 2);
-      }, 30);
+      const timer = setTimeout(() => setPercent(prev => prev + 2), 30);
       return () => clearTimeout(timer);
     } else {
-      setStage('fading');
-      setTimeout(() => {
-        setStage('content');
-        // Ошибка через 15 секунд после появления контента
-        setTimeout(() => setIsError(true), 15000);
-      }, 400); 
+      if (stage === 'loading') {
+        setStage('fading');
+        setTimeout(() => setStage('content'), 400); 
+      }
     }
-  }, [percent]);
+  }, [percent, stage]);
+
+  // 2. ЦИКЛ ОШИБКИ И САМОВОССТАНОВЛЕНИЯ
+  useEffect(() => {
+    let errorTimer;
+    let recoveryTimer;
+
+    if (stage === 'content' && !isError) {
+      // Включаем ошибку через 15 секунд
+      errorTimer = setTimeout(() => setIsError(true), 15000);
+    }
+
+    if (isError) {
+      // Выключаем ошибку (чиним основной блок) еще через 15 секунд
+      recoveryTimer = setTimeout(() => {
+        setIsError(false);
+        setWasRestored(true); // Теперь текст в блоке изменится на новый
+      }, 15000);
+    }
+
+    return () => {
+      clearTimeout(errorTimer);
+      clearTimeout(recoveryTimer);
+    };
+  }, [stage, isError]);
 
   return (
     <div className={`relative min-h-screen transition-colors duration-1000 font-mono overflow-hidden ${isError ? 'bg-[#1a0000]' : 'bg-[#0d0d0d]'} text-[#a0a0a0]`}>
@@ -77,7 +98,7 @@ export default function App() {
       
       <DigitalRain isError={isError} />
 
-      {/* ПРЕЛОАДЕР */}
+      {/* ПРЕЛОАДЕР (только при первом заходе) */}
       {stage !== 'content' && (
         <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0d0d0d] transition-opacity duration-500 ${stage === 'fading' ? 'opacity-0' : 'opacity-100'}`}>
           <div className="text-[#00f3ff] text-sm tracking-[0.3em] mb-4 uppercase">
@@ -92,7 +113,7 @@ export default function App() {
         </div>
       )}
 
-      {/* КОНТЕНТ */}
+      {/* ОСНОВНОЙ БЛОК */}
       {stage === 'content' && (
         <div className={`relative z-10 min-h-screen flex items-center justify-center p-6 animate-fade-in ${isError ? 'animate-shake' : ''}`}>
           <div className={`w-full max-w-4xl p-8 md:p-16 border transition-all duration-500 ${isError ? 'border-red-600 shadow-[0_0_50px_rgba(255,0,0,0.4)] bg-red-900/10' : 'border-[#00f3ff]/30 bg-[#0d0d0d]/80 shadow-[0_0_30px_rgba(0,243,255,0.1)]'} backdrop-blur-md`}>
@@ -113,8 +134,11 @@ export default function App() {
               
               <p className={`text-sm md:text-lg leading-relaxed max-w-2xl transition-colors ${isError ? 'text-red-400/60' : 'text-gray-400'}`}>
                 {isError 
-                  ? "Обнаружена утечка данных. Процесс материализации прерван. Лазеры десинхронизированы. Немедленно покиньте лабораторию."
-                  : "«Мы калибруем лазеры и настраиваем подачу неона. Совсем скоро границы между цифровой моделью и осязаемым артефактом сотрутся окончательно. В лаборатории «ВНЕ РАМОК» идет финальная стадия сборки»."
+                  ? "Обнаружена десинхронизация потоков. Процесс материализации прерван. Ожидайте автоматического восстановления системы."
+                  : (wasRestored 
+                      ? "Настраиваем загрузку из нематериального в материальное. Ждите..."
+                      : "«Мы калибруем лазеры и настраиваем подачу неона. Совсем скоро границы между цифровой моделью и осязаемым артефактом сотрутся окончательно. В лаборатории «ВНЕ РАМОК» идет финальная стадия сборки»."
+                    )
                 }
               </p>
             </main>
